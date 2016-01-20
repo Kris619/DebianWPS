@@ -27,7 +27,7 @@ checkinstall ()
         # true
         return 0
     fi
-    
+
     # false
     return 1
 }
@@ -53,19 +53,47 @@ if ! checkinstall ca-certificates; then
 fi
 
 # Install WordPress
-read -p "Verify that the Web Server works before continuing.
-Press any key to continue. CTRL+C to quit."
-
 cd /var/www/html
 wget https://wordpress.org/latest.tar.gz
-tar -xzvf latest.tar.gz
+tar xzvf latest.tar.gz
 mv wordpress/* .
 rm -r wordpress
+rm latest.tar.gz
+
+# Modify configurations
+echo "extension=mysql.so" >> /etc/php5/apache2/php.ini
+echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
+echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc
+service tor restart
+service apache2 restart
+
+# Inform user on their new .onion address
+if $testmode; then
+    echo "Tor Hidden Service"
+    cat /var/lib/tor/hidden_service/hostname
+fi
+
+# Initiate MySQL database
+echo "Initiating the MySQL database..."
+echo "Username: root"
+mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS wordpress;"
 
 # Move default html index file so WordPress can run
 if [ -f /var/www/html/index.html ]; then
     mv /var/www/html/index.html /var/www/html/indexold.html
 fi
 
+# Temporary permissions
+chmod 777 /var/www/html
+
+read -p "Create wp-config.php before proceeding.
+Press any button to continue."
+
+# Setup safe WordPress permissions
+chown www-data:www-data /var/www/html
+find . -type f -exec chmod 664 {} +
+find . -type d -exec chmod 775 {} +
+
 echo "The latest WordPress has been installed"
 exit 0
+
